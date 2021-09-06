@@ -1,0 +1,28 @@
+[package]
+name = "wasm-ue3-config-parser"
+version = "0.1.0"
+authors = ["robojumper <robojumper@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+#default = ["console_error_panic_hook"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2.73", features = ["serde-serialize"] }
+serde = { version = "1.0", features = ["derive"] }
+line-col = { version = "0.2", features = ["grapheme-clusters"] }
+
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.1", optional = true }
+
+ue3-config-parser = { path = "../ue3-config-parser" }
+
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2"

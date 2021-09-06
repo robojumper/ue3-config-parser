@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "ue3-config-parser",
+    "wasm-ue3-config-parser",
+]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+#opt-level = "s"
+#panic = "abort"

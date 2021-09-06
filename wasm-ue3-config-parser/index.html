@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>XCOM 2 Config File Checker</title>
+  <style type="text/css">
+    *,
+    ::before,
+    ::after {
+      box-sizing: inherit;
+    }
+
+    html {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: darkgray;
+      padding: 0 1em;
+      margin: 0;
+    }
+
+    #main {
+      display: flex;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    #mainarea {
+      height: 100%;
+    }
+
+    #maineditor {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      border: 4px solid #bbb;
+      border-radius: 4px;
+    }
+
+    #editor {
+      width: 100%;
+      height: 100%;
+    }
+
+    #header {
+      display: flex;
+      padding: 1.25em 0;
+    }
+
+    #footer {
+      display: flex;
+      padding: 1.25em 0;
+    }
+
+    .button {
+      margin-left: 0.25em;
+      margin-right: 0.25em;
+      border: 1px solid #241d13;
+      display: inline-block;
+      padding: 9px 23px;
+      white-space: nowrap;
+    }
+
+    .beforeform {
+      padding: 10px 0px;
+      align-content: center;
+    }
+
+    .uitext {
+      font-family: Arial;
+      font-size: 15px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .button-enabled {
+      cursor: pointer;
+      fill: white;
+      color: white;
+      background-color: #007dc1;
+      box-shadow: inset 0px 34px 0px -15px #54a3f7;
+      text-shadow: 0px -1px 0px #154682;
+    }
+
+    .button-disabled {
+      fill: black;
+      color: black;
+      background-color: #d4d4d4;
+      box-shadow: inset 0px 34px 0px -15px #e0e0e0;
+    }
+
+    .button-enabled:hover {
+      background-color: #0061a7;
+    }
+
+    .button-enabled:active {
+      position: relative;
+      top: 1px;
+    }
+
+    .buttoncontent {
+      align-content: center;
+      display: flex;
+      flex-direction: row;
+      margin: 0 -15px;
+    }
+
+    svg {
+      flex-shrink: 0;
+      margin: 2px;
+    }
+
+    .spacer {
+      flex-grow: 1;
+    }
+
+    .smallspacer {
+      flex-grow: 0.1;
+    }
+
+    .margin-error {
+      background-color: red;
+    }
+  </style>
+</head>
+
+<body>
+  <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
+  <div>
+    <div id="main">
+      <div id="header">
+        <label id="uploadbutton" class="button button-enabled uitext" title="Upload">
+          <div class="buttoncontent">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="16" viewBox="0 0 10 16">
+              <path fill-rule="evenodd" d="M5 3L0 9h3v4h4V9h3L5 3z"></path>
+            </svg>
+            <span>upload</span>
+          </div>
+          <input id="filepick" type="file" style="display: none;" />
+        </label>
+        <div class="spacer"></div>
+
+        <a class="button button-enabled uitext" title="Visit GitHub repository" target="_blank" rel="noopener"
+          href="https://github.com/robojumper/ue3-config-parser/">
+          <div class="buttoncontent">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+              <path fill-rule="evenodd"
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+              </path>
+            </svg>
+            <span>visit GitHub</span>
+          </div>
+        </a>
+      </div>
+      <div id="mainarea">
+        <div id="maineditor">
+          <div id="editor"></div>
+        </div>
+      </div>
+      <div id="footer"></div>
+    </div>
+  </div>
+</body>
+
+</html>
