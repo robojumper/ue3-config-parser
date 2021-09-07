@@ -1,6 +1,10 @@
+use crate::check::Diag;
+pub use crate::check::{ErrorKind, ReportedError};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::ops::Index;
+
+mod check;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Span(pub usize, pub usize);
@@ -80,23 +84,6 @@ impl Index<&Span> for str {
         &self[index.0..index.1]
     }
 }
-
-#[derive(Clone, Copy, Debug)]
-pub struct ReportedError {
-    pub kind: ErrorKind,
-    pub span: Span,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum ErrorKind {
-    InvalidIdent,
-    MalformedHeader,
-    SpaceAfterMultiline,
-    SlashSlashComent,
-    Other,
-}
-
-static IDENT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9_]?$").unwrap());
 
 static KEY: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[A-Za-z][A-Za-z0-9_]*(\[(0|[1-9][0-9]*)\]|\((0|[1-9][0-9]*)\))?$").unwrap()
@@ -227,7 +214,7 @@ impl<'a> Directives<'a> {
                         });
                     }
 
-                    match validate_property_text(self.text, value, strict) {
+                    match check::validate_property_text(self.text, value, strict) {
                         Diag::Ok | Diag::None => {}
                         Diag::Err(e) => {
                             errs.extend(e);
@@ -235,7 +222,7 @@ impl<'a> Directives<'a> {
                     }
                 }
                 Directive::Unknown(Unknown { span, prev_span }) => {
-                    match try_report_comment(self.text, span) {
+                    match check::try_report_comment(self.text, span) {
                         Diag::Ok => continue,
                         Diag::None => {}
                         Diag::Err(e) => {
@@ -244,7 +231,7 @@ impl<'a> Directives<'a> {
                         }
                     }
 
-                    match try_report_section_error(self.text, span) {
+                    match check::try_report_section_error(self.text, span) {
                         Diag::Ok => continue,
                         Diag::None => {}
                         Diag::Err(e) => {
@@ -277,74 +264,6 @@ impl<'a> Directives<'a> {
 
         errs
     }
-}
-
-#[derive(Clone, Debug)]
-enum Diag {
-    Ok,
-    None,
-    Err(Vec<ReportedError>),
-}
-
-fn try_report_comment(text: &str, span: &Span) -> Diag {
-    let line = &text[span];
-    let trimmed_line = line.trim();
-
-    if trimmed_line.starts_with(';') {
-        Diag::Ok
-    } else if trimmed_line.starts_with(r"//") {
-        Diag::Err(vec![ReportedError {
-            span: *span,
-            kind: ErrorKind::SlashSlashComent,
-        }])
-    } else {
-        Diag::None
-    }
-}
-
-fn try_report_section_error(text: &str, span: &Span) -> Diag {
-    let line = &text[span];
-    let trimmed_line = if let Some(pos) = line.find(';') {
-        line[..pos].trim()
-    } else {
-        line.trim()
-    };
-
-    if matches!(
-        (
-            trimmed_line.as_bytes().first(),
-            trimmed_line.as_bytes().last()
-        ),
-        (Some(b'['), Some(b']'))
-    ) {
-        Diag::Err(vec![ReportedError {
-            span: *span,
-            kind: ErrorKind::MalformedHeader,
-        }])
-    } else {
-        Diag::None
-    }
-}
-
-fn validate_property_text(text: &str, span: &Span, strict: bool) -> Diag {
-    // And this is where this whole thing becomes a bit sad.
-    // Basically any property text is valid because the UE3
-    // config parser doesn't care about types -- it's strings
-    // all the way down. In fact, even the regex used for keys
-    // already excludes things the config parser happily accepts.
-    //
-    // As a result, this function needs to be a bit creative with guessing
-    // what the user intended in order to not yield too many false positives.
-
-    let unescaped_text = &text[span];
-    let trimmed_unescaped_text = unescaped_text.trim();
-
-    // Name, simple string, enum
-    if IDENT.is_match(trimmed_unescaped_text) {
-        return Diag::Ok;
-    }
-
-    return Diag::None;
 }
 
 #[cfg(test)]

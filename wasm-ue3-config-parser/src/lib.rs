@@ -31,6 +31,7 @@ pub fn check(input: &str) -> JsValue {
             ue3_config_parser::ErrorKind::MalformedHeader => "Invalid header. The first character of a header line must be `[` and the last must be `]`.",
             ue3_config_parser::ErrorKind::SpaceAfterMultiline => "Unrecognized directive (space after backslashes)",
             ue3_config_parser::ErrorKind::SlashSlashComent => "UnrealScript-style comment (please use `;`)",
+            ue3_config_parser::ErrorKind::BadValue => "Bad Value",
             ue3_config_parser::ErrorKind::Other => "Invalid config directive",
         };
 
