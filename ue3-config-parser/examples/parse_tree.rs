@@ -40,7 +40,7 @@ fn main() {
         };
 
         let d = ue3_config_parser::Directives::from_text(&contents);
-        for u in &d.validate() {
+        for u in &d.validate(true) {
             println!("{:?}: {:?} {:?}", entry.path(), u.kind, u.span);
             println!("{}", &(*contents)[u.span]);
         }

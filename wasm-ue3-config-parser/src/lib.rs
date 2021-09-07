@@ -18,7 +18,7 @@ pub struct Annotation {
 #[wasm_bindgen]
 pub fn check(input: &str) -> JsValue {
     let directives = ue3_config_parser::Directives::from_text(input);
-    let errors = directives.validate();
+    let errors = directives.validate(true);
 
     let lookup = line_col::LineColLookup::new(input);
     let mut annots = vec![];

@@ -1,3 +1,5 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::ops::Index;
 
 #[derive(Clone, Copy, Debug)]
@@ -11,7 +13,7 @@ pub struct Identifier {
 #[derive(Clone, Copy, Debug)]
 pub struct SectionHeader {
     pub span: Span,
-    pub class_name: Span,
+    pub obj_name: Span,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +66,17 @@ pub struct Directives<'a> {
 impl Index<Span> for str {
     type Output = str;
 
+    #[inline]
     fn index(&self, index: Span) -> &Self::Output {
+        &self[index.0..index.1]
+    }
+}
+
+impl Index<&Span> for str {
+    type Output = str;
+
+    #[inline]
+    fn index(&self, index: &Span) -> &Self::Output {
         &self[index.0..index.1]
     }
 }
@@ -84,16 +96,14 @@ pub enum ErrorKind {
     Other,
 }
 
-fn validate_ident(text: &str, span: &Span, path: bool) -> Result<(), usize> {
-    for (idx, c) in text[*span].char_indices() {
-        match c {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '(' | ')' | '[' | ']' => {}
-            '.' | ' ' if path => {}
-            _ => return Err(idx),
-        }
-    }
-    Ok(())
-}
+static IDENT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9_]?$").unwrap());
+
+static KEY: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[A-Za-z][A-Za-z0-9_]*(\[(0|[1-9][0-9]*)\]|\((0|[1-9][0-9]*)\))?$").unwrap()
+});
+
+static OBJECT: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9_]*([ \.][A-Za-z][A-Za-z0-9_]*)?$").unwrap());
 
 impl<'a> Directives<'a> {
     pub fn from_text(text: &'a str) -> Self {
@@ -136,7 +146,7 @@ impl<'a> Directives<'a> {
                 ) {
                     directives.push(Directive::SectionHeader(SectionHeader {
                         span,
-                        class_name: Span(span.0 + 1, span.1 - 1),
+                        obj_name: Span(span.0 + 1, span.1 - 1),
                     }));
                 } else {
                     let mut trim_span = span;
@@ -189,15 +199,15 @@ impl<'a> Directives<'a> {
         directives
     }
 
-    pub fn validate(&self) -> Vec<ReportedError> {
+    pub fn validate(&self, strict: bool) -> Vec<ReportedError> {
         let mut errs = vec![];
         for d in &self.directives {
             match d {
                 Directive::SectionHeader(SectionHeader {
                     span: _,
-                    class_name,
+                    obj_name: class_name,
                 }) => {
-                    if let Err(_idx) = validate_ident(self.text, class_name, true) {
+                    if !OBJECT.is_match(&self.text[class_name]) {
                         errs.push(ReportedError {
                             span: *class_name,
                             kind: ErrorKind::InvalidIdent,
@@ -207,42 +217,44 @@ impl<'a> Directives<'a> {
                 Directive::Kvp(Kvp {
                     span: _,
                     ident,
-                    value: _,
+                    value,
                     op: _,
                 }) => {
-                    if let Err(_idx) = validate_ident(self.text, ident, false) {
+                    if !KEY.is_match(&self.text[ident]) {
                         errs.push(ReportedError {
                             span: *ident,
                             kind: ErrorKind::InvalidIdent,
                         });
                     }
+
+                    match validate_property_text(self.text, value, strict) {
+                        Diag::Ok | Diag::None => {}
+                        Diag::Err(e) => {
+                            errs.extend(e);
+                        }
+                    }
                 }
                 Directive::Unknown(Unknown { span, prev_span }) => {
-                    let line = &self.text[*span];
-                    let trimmed_line = line.trim();
-                    let mut reported = false;
-                    if trimmed_line.starts_with(';') {
-                        /* comments are fine */
-                    } else if matches!(
-                        (
-                            trimmed_line.as_bytes().first(),
-                            trimmed_line.as_bytes().last()
-                        ),
-                        (Some(b'['), Some(b']'))
-                    ) {
-                        errs.push(ReportedError {
-                            span: *span,
-                            kind: ErrorKind::MalformedHeader,
-                        });
-                        reported = true;
-                    } else if trimmed_line.starts_with(r"//") {
-                        errs.push(ReportedError {
-                            span: *span,
-                            kind: ErrorKind::SlashSlashComent,
-                        });
-                        reported = true;
-                    } else if let Some(prev_span) = prev_span {
-                        let prev_line = &self.text[*prev_span];
+                    match try_report_comment(self.text, span) {
+                        Diag::Ok => continue,
+                        Diag::None => {}
+                        Diag::Err(e) => {
+                            errs.extend(e);
+                            continue;
+                        }
+                    }
+
+                    match try_report_section_error(self.text, span) {
+                        Diag::Ok => continue,
+                        Diag::None => {}
+                        Diag::Err(e) => {
+                            errs.extend(e);
+                            continue;
+                        }
+                    }
+
+                    if let Some(prev_span) = prev_span {
+                        let prev_line = &self.text[prev_span];
                         if !prev_line.ends_with(r"\\") {
                             if let Some(beg) = prev_line.trim_end().rfind(r"\\") {
                                 let err_sp = Span(prev_span.0 + beg, span.1);
@@ -250,17 +262,15 @@ impl<'a> Directives<'a> {
                                     span: err_sp,
                                     kind: ErrorKind::SpaceAfterMultiline,
                                 });
-                                reported = true;
+                                continue;
                             }
                         }
                     }
 
-                    if !reported {
-                        errs.push(ReportedError {
-                            span: *span,
-                            kind: ErrorKind::Other,
-                        });
-                    }
+                    errs.push(ReportedError {
+                        span: *span,
+                        kind: ErrorKind::Other,
+                    });
                 }
             }
         }
@@ -269,11 +279,109 @@ impl<'a> Directives<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
+enum Diag {
+    Ok,
+    None,
+    Err(Vec<ReportedError>),
+}
+
+fn try_report_comment(text: &str, span: &Span) -> Diag {
+    let line = &text[span];
+    let trimmed_line = line.trim();
+
+    if trimmed_line.starts_with(';') {
+        Diag::Ok
+    } else if trimmed_line.starts_with(r"//") {
+        Diag::Err(vec![ReportedError {
+            span: *span,
+            kind: ErrorKind::SlashSlashComent,
+        }])
+    } else {
+        Diag::None
+    }
+}
+
+fn try_report_section_error(text: &str, span: &Span) -> Diag {
+    let line = &text[span];
+    let trimmed_line = if let Some(pos) = line.find(';') {
+        line[..pos].trim()
+    } else {
+        line.trim()
+    };
+
+    if matches!(
+        (
+            trimmed_line.as_bytes().first(),
+            trimmed_line.as_bytes().last()
+        ),
+        (Some(b'['), Some(b']'))
+    ) {
+        Diag::Err(vec![ReportedError {
+            span: *span,
+            kind: ErrorKind::MalformedHeader,
+        }])
+    } else {
+        Diag::None
+    }
+}
+
+fn validate_property_text(text: &str, span: &Span, strict: bool) -> Diag {
+    // And this is where this whole thing becomes a bit sad.
+    // Basically any property text is valid because the UE3
+    // config parser doesn't care about types -- it's strings
+    // all the way down. In fact, even the regex used for keys
+    // already excludes things the config parser happily accepts.
+    //
+    // As a result, this function needs to be a bit creative with guessing
+    // what the user intended in order to not yield too many false positives.
+
+    let unescaped_text = &text[span];
+    let trimmed_unescaped_text = unescaped_text.trim();
+
+    // Name, simple string, enum
+    if IDENT.is_match(trimmed_unescaped_text) {
+        return Diag::Ok;
+    }
+
+    return Diag::None;
+}
+
 #[cfg(test)]
 mod tests {
     use expect_test::expect;
 
-    use crate::Directives;
+    use crate::{Directives, KEY, OBJECT};
+
+    #[test]
+    fn regex_key() {
+        assert!(KEY.is_match("MyProperty"));
+        assert!(KEY.is_match("My_Property"));
+        assert!(KEY.is_match("My_Property[0]"));
+        assert!(KEY.is_match("My_Property[10]"));
+        assert!(KEY.is_match("My_Property01"));
+        assert!(KEY.is_match("My_Property(1)"));
+
+        assert!(!KEY.is_match("My_Property[01]"));
+        assert!(!KEY.is_match("My-Property[01]"));
+        assert!(!KEY.is_match("01My_Property"));
+        assert!(!KEY.is_match("My_Property[1]a"));
+        assert!(!KEY.is_match("My_Property{1}"));
+    }
+
+    #[test]
+    fn regex_object() {
+        assert!(OBJECT.is_match("MyHeader"));
+        assert!(OBJECT.is_match("My_Header_1234"));
+        assert!(OBJECT.is_match("MyPackage.MyHeader"));
+        assert!(OBJECT.is_match("My_Name My_Object"));
+        assert!(OBJECT.is_match("MyPackage345.MyClass678"));
+
+        assert!(!OBJECT.is_match(" MyHeader"));
+        assert!(!OBJECT.is_match("MyHeader "));
+        assert!(!OBJECT.is_match("01NotAPackage"));
+        assert!(!OBJECT.is_match("Not-A-Package"));
+    }
 
     #[test]
     fn buggy_section_header() {
@@ -308,7 +416,7 @@ mod tests {
                 },
             ]
         "#]];
-        expected_errs.assert_debug_eq(&dirs.validate())
+        expected_errs.assert_debug_eq(&dirs.validate(false))
     }
 
     #[test]
@@ -368,7 +476,7 @@ mod tests {
                 },
             ]
         "#]];
-        expected_errs.assert_debug_eq(&dirs.validate())
+        expected_errs.assert_debug_eq(&dirs.validate(false))
     }
 
     #[test]
@@ -384,7 +492,7 @@ mod tests {
                                 0,
                                 19,
                             ),
-                            class_name: Span(
+                            obj_name: Span(
                                 1,
                                 18,
                             ),

@@ -1,5 +1,4 @@
 const rust = import('./pkg');
-import * as monaco from 'monaco-editor';
 
 var editor = undefined;
 var decorations = [];
@@ -77,7 +76,7 @@ rust.then(wasm => {
 			});
 
 			var range = new monaco.Range(annot.line, annot.col, annot.eline, annot.ecol);
-			new_decorations.push({range: range, options: {glyphMarginClassName: "margin-error"}})
+			new_decorations.push({ range: range, options: { glyphMarginClassName: "margin-error" } })
 
 		}
 		decorations = editor.getModel().deltaDecorations(decorations, new_decorations);
@@ -111,6 +110,12 @@ rust.then(wasm => {
 			'[AnotherBuggyHeader] ; this is not a comment',
 			'',
 			'; comment',
+			'',
+			'+NotAValidIndex[01]=1',
+			'',
+			'+AlsoInvalid{01}=1',
+			'',
+			'+VeryValid="(Str=\\"Abc\\\\nDef\\", Ints[0]=345)"',
 		].join('\n'),
 		language: 'ini',
 		theme: 'vs-dark',
