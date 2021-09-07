@@ -68,7 +68,7 @@ pub fn try_report_section_error(text: &str, span: &Span) -> Diag {
     }
 }
 
-pub fn validate_property_text(text: &str, span: &Span, strict: bool) -> Diag {
+pub fn validate_property_text(text: &str, span: &Span, _strict: bool) -> Diag {
     // And this is where this whole thing becomes a bit sad.
     // Basically any property text is valid because the UE3
     // config parser doesn't care about types -- it's strings
@@ -113,7 +113,11 @@ pub fn validate_property_text(text: &str, span: &Span, strict: bool) -> Diag {
         }
         reduced = reduced[1..reduced.len() - 1].replace("\\\\", "\\");
         reduced = reduced.replace("\\\"", "\"");
-        reduced = reduced.replace("\\n", "\n");
+        // TODO
+        #[allow(unused_assignments)]
+        {
+            reduced = reduced.replace("\\n", "\n");
+        }
 
         Diag::Ok
     } else {
