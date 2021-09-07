@@ -387,6 +387,13 @@ mod tests {
         let expected_errs = expect![[r#"
             [
                 ReportedError {
+                    kind: BadValue,
+                    span: Span(
+                        13,
+                        31,
+                    ),
+                },
+                ReportedError {
                     kind: SpaceAfterMultiline,
                     span: Span(
                         28,
