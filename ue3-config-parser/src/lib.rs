@@ -13,10 +13,6 @@ pub struct SectionHeader {
     pub span: Span,
     pub class_name: Span,
 }
-#[derive(Clone, Copy, Debug)]
-pub struct Comment {
-    pub span: Span,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KvpOperation {
@@ -55,7 +51,6 @@ pub struct Unknown {
 #[derive(Clone, Copy, Debug)]
 pub enum Directive {
     SectionHeader(SectionHeader),
-    Comment(Comment),
     Kvp(Kvp),
     Unknown(Unknown),
 }
@@ -93,7 +88,7 @@ fn validate_ident(text: &str, span: &Span, path: bool) -> Result<(), usize> {
     for (idx, c) in text[*span].char_indices() {
         match c {
             'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '(' | ')' | '[' | ']' => {}
-            '.' | ' ' if path => {},
+            '.' | ' ' if path => {}
             _ => return Err(idx),
         }
     }
@@ -144,20 +139,12 @@ impl<'a> Directives<'a> {
                         class_name: Span(span.0 + 1, span.1 - 1),
                     }));
                 } else {
-                    let trim_span = {
-                        let mut start = span.0;
-                        let start = loop {
-                            match text.as_bytes().get(start) {
-                                Some(b' ' | b'\t') => start += 1,
-                                _ => break start,
-                            }
-                        };
-                        Span(start, span.1)
-                    };
+                    let mut trim_span = span;
+                    while let Some(b' ' | b'\t') = text.as_bytes().get(trim_span.0) {
+                        trim_span.0 += 1;
+                    }
                     let trim_line = &text[trim_span];
-                    if trim_line.as_bytes().first() == Some(&b';') {
-                        directives.push(Directive::Comment(Comment { span: trim_span }));
-                    } else if let Some(p) = trim_line.find('=') {
+                    if let Some(p) = trim_line.find('=') {
                         let mut prop_span = Span(trim_span.0, trim_span.0 + p);
                         while let Some(b' ' | b'\t') = text.as_bytes().get(prop_span.1 - 1) {
                             prop_span.1 -= 1;
@@ -204,10 +191,12 @@ impl<'a> Directives<'a> {
 
     pub fn validate(&self) -> Vec<ReportedError> {
         let mut errs = vec![];
-        for d in &self.directives{
+        for d in &self.directives {
             match d {
-                Directive::Comment(_) => { /* comments are fine */ }
-                Directive::SectionHeader(SectionHeader { span: _, class_name }) => {
+                Directive::SectionHeader(SectionHeader {
+                    span: _,
+                    class_name,
+                }) => {
                     if let Err(_idx) = validate_ident(self.text, class_name, true) {
                         errs.push(ReportedError {
                             span: *class_name,
@@ -232,7 +221,9 @@ impl<'a> Directives<'a> {
                     let line = &self.text[*span];
                     let trimmed_line = line.trim();
                     let mut reported = false;
-                    if matches!(
+                    if trimmed_line.starts_with(';') {
+                        /* comments are fine */
+                    } else if matches!(
                         (
                             trimmed_line.as_bytes().first(),
                             trimmed_line.as_bytes().last()
@@ -245,14 +236,20 @@ impl<'a> Directives<'a> {
                         });
                         reported = true;
                     } else if trimmed_line.starts_with(r"//") {
-                        errs.push(ReportedError { span: *span, kind: ErrorKind::SlashSlashComent });
+                        errs.push(ReportedError {
+                            span: *span,
+                            kind: ErrorKind::SlashSlashComent,
+                        });
                         reported = true;
                     } else if let Some(prev_span) = prev_span {
                         let prev_line = &self.text[*prev_span];
                         if !prev_line.ends_with(r"\\") {
                             if let Some(beg) = prev_line.trim_end().rfind(r"\\") {
                                 let err_sp = Span(prev_span.0 + beg, span.1);
-                                errs.push(ReportedError { span: err_sp, kind: ErrorKind::SpaceAfterMultiline });
+                                errs.push(ReportedError {
+                                    span: err_sp,
+                                    kind: ErrorKind::SpaceAfterMultiline,
+                                });
                                 reported = true;
                             }
                         }
@@ -297,44 +294,45 @@ mod tests {
                 ],
             }
         "#]];
-        expected.assert_debug_eq(&Directives::from_text(header));
+        let dirs = Directives::from_text(header);
+        expected.assert_debug_eq(&dirs);
+
+        let expected_errs = expect![[r#"
+            [
+                ReportedError {
+                    kind: MalformedHeader,
+                    span: Span(
+                        0,
+                        20,
+                    ),
+                },
+            ]
+        "#]];
+        expected_errs.assert_debug_eq(&dirs.validate())
     }
 
     #[test]
     fn buggy_backslashes() {
         let header = r#"
-[CorrectHeader MyClass]
 +MyVariable=(Abc[0]="Def", \\ 
     )"#;
         let expected = expect![[r#"
             Directives {
-                text: "\n[CorrectHeader MyClass]\n+MyVariable=(Abc[0]=\"Def\", \\\\ \n    )",
+                text: "\n+MyVariable=(Abc[0]=\"Def\", \\\\ \n    )",
                 directives: [
-                    SectionHeader(
-                        SectionHeader {
-                            span: Span(
-                                1,
-                                24,
-                            ),
-                            class_name: Span(
-                                2,
-                                23,
-                            ),
-                        },
-                    ),
                     Kvp(
                         Kvp {
                             span: Span(
-                                26,
-                                55,
+                                2,
+                                31,
                             ),
                             ident: Span(
-                                26,
-                                36,
+                                2,
+                                12,
                             ),
                             value: Span(
-                                37,
-                                55,
+                                13,
+                                31,
                             ),
                             op: InsertUnique,
                         },
@@ -342,13 +340,13 @@ mod tests {
                     Unknown(
                         Unknown {
                             span: Span(
-                                56,
-                                61,
+                                32,
+                                37,
                             ),
                             prev_span: Some(
                                 Span(
-                                    25,
-                                    55,
+                                    1,
+                                    31,
                                 ),
                             ),
                         },
@@ -364,16 +362,14 @@ mod tests {
                 ReportedError {
                     kind: SpaceAfterMultiline,
                     span: Span(
-                        52,
-                        61,
+                        28,
+                        37,
                     ),
                 },
             ]
         "#]];
         expected_errs.assert_debug_eq(&dirs.validate())
     }
-
-
 
     #[test]
     fn correct_section_header() {

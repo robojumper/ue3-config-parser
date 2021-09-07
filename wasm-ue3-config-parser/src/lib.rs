@@ -1,5 +1,5 @@
-use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Annotations {
@@ -34,10 +34,18 @@ pub fn check(input: &str) -> JsValue {
             ue3_config_parser::ErrorKind::Other => "Invalid config directive",
         };
 
-        annots.push(Annotation { err: err.into(), line: line as u32, col: col as u32, eline: eline as u32, ecol: ecol as u32 });
+        annots.push(Annotation {
+            err: err.into(),
+            line: line as u32,
+            col: col as u32,
+            eline: eline as u32,
+            ecol: ecol as u32,
+        });
     }
 
-    let annots = Annotations { annots: annots.into_boxed_slice() };
+    let annots = Annotations {
+        annots: annots.into_boxed_slice(),
+    };
 
     JsValue::from_serde(&annots).unwrap()
 }
