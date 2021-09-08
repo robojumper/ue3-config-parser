@@ -1,6 +1,7 @@
 use std::fs::read_to_string;
 use std::io;
 
+use ue3_config_parser::check::SimpleSyntaxValidator;
 use walkdir::{DirEntry, WalkDir};
 
 fn is_ini(entry: &DirEntry) -> bool {
@@ -39,8 +40,8 @@ fn main() {
             }
         };
 
-        let d = ue3_config_parser::Directives::from_text(&contents);
-        for u in &d.validate(true) {
+        let d = ue3_config_parser::parse::Directives::from_text(&contents);
+        for u in &d.validate(&SimpleSyntaxValidator) {
             println!("{:?}: {:?} {:?}", entry.path(), u.kind, u.span);
             println!("{}", &(*contents)[u.span]);
         }

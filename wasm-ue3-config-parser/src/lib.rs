@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
+use ue3_config_parser::{
+    check::{ErrorKind, SimpleSyntaxValidator},
+    parse::Directives,
+};
+
 #[derive(Serialize, Deserialize)]
 pub struct Annotations {
     pub annots: Box<[Annotation]>,
@@ -17,8 +22,8 @@ pub struct Annotation {
 
 #[wasm_bindgen]
 pub fn check(input: &str) -> JsValue {
-    let directives = ue3_config_parser::Directives::from_text(input);
-    let errors = directives.validate(true);
+    let directives = Directives::from_text(input);
+    let errors = directives.validate(&SimpleSyntaxValidator);
 
     let lookup = line_col::LineColLookup::new(input);
     let mut annots = vec![];
@@ -27,12 +32,12 @@ pub fn check(input: &str) -> JsValue {
         let (line, col) = lookup.get_by_cluster(e.span.0);
         let (eline, ecol) = lookup.get_by_cluster(e.span.1);
         let err = match e.kind {
-            ue3_config_parser::ErrorKind::InvalidIdent => "Invalid identifier",
-            ue3_config_parser::ErrorKind::MalformedHeader => "Invalid header. The first character of a header line must be `[` and the last must be `]`.",
-            ue3_config_parser::ErrorKind::SpaceAfterMultiline => "Unrecognized directive (space after backslashes)",
-            ue3_config_parser::ErrorKind::SlashSlashComent => "UnrealScript-style comment (please use `;`)",
-            ue3_config_parser::ErrorKind::BadValue => "Bad Value",
-            ue3_config_parser::ErrorKind::Other => "Invalid config directive",
+            ErrorKind::InvalidIdent => "Invalid identifier",
+            ErrorKind::MalformedHeader => "Invalid header. The first character of a header line must be `[` and the last must be `]`.",
+            ErrorKind::SpaceAfterMultiline => "Unrecognized directive (space after backslashes)",
+            ErrorKind::SlashSlashComent => "UnrealScript-style comment (please use `;`)",
+            ErrorKind::BadValue => "Bad Value",
+            ErrorKind::Other => "Invalid config directive",
         };
 
         annots.push(Annotation {
