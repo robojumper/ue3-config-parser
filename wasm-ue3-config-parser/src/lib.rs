@@ -22,6 +22,10 @@ pub struct Annotation {
 
 #[wasm_bindgen]
 pub fn check(input: &str) -> JsValue {
+    JsValue::from_serde(&check_inner(input)).unwrap()
+}
+
+fn check_inner(input: &str) -> Annotations {
     let directives = Directives::from_text(input);
     let errors = directives.validate(&SimpleSyntaxValidator);
 
@@ -31,12 +35,13 @@ pub fn check(input: &str) -> JsValue {
     for e in errors {
         let (line, col) = lookup.get_by_cluster(e.span.0);
         let (eline, ecol) = lookup.get_by_cluster(e.span.1);
-        let err = match e.kind {
+        let err = match &e.kind {
             ErrorKind::InvalidIdent => "Invalid identifier",
             ErrorKind::MalformedHeader => "Invalid header. The first character of a header line must be `[` and the last must be `]`.",
             ErrorKind::SpaceAfterMultiline => "Unrecognized directive (space after backslashes)",
             ErrorKind::SlashSlashComent => "UnrealScript-style comment (please use `;`)",
             ErrorKind::BadValue => "Bad Value",
+            ErrorKind::Custom(s) => s,
             ErrorKind::Other => "Invalid config directive",
         };
 
@@ -48,12 +53,8 @@ pub fn check(input: &str) -> JsValue {
             ecol: ecol as u32,
         });
     }
-
-    let annots = Annotations {
-        annots: annots.into_boxed_slice(),
-    };
-
-    JsValue::from_serde(&annots).unwrap()
+    
+    Annotations { annots: annots.into_boxed_slice() }
 }
 
 #[wasm_bindgen]
@@ -66,4 +67,17 @@ pub fn init() {
     // https://github.com/rustwasm/console_error_panic_hook#readme
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
+}
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn test_weird() {
+        let input = r#"+SpawnDistributionLists=(ListID="DefaultLeaders", \\
+    SpawnDistribution[0]=(Template="AdvWraithM1", 		MinForceLevel=3, 	MaxForceLevel=7, 	MaxCharactersPerGroup=1, 	SpawnWeight=5), \\
+    )"#;
+
+        super::check_inner(input);
+    }
 }

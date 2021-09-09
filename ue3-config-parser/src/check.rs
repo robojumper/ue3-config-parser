@@ -3,6 +3,8 @@ use regex::Regex;
 
 use crate::parse::{Directive, Directives, Kvp, KvpOperation, SectionHeader, Span, Unknown};
 
+mod struct_syntax;
+
 static KEY: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[A-Za-z][A-Za-z0-9_]*(\[(0|[1-9][0-9]*)\]|\((0|[1-9][0-9]*)\))?$").unwrap()
 });
@@ -10,7 +12,7 @@ static KEY: Lazy<Regex> = Lazy::new(|| {
 static OBJECT: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9_]*([ \.][A-Za-z][A-Za-z0-9_]*)?$").unwrap());
 
-static IDENT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9_]?$").unwrap());
+static IDENT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[A-Za-z][A-Za-z0-9_]*$").unwrap());
 
 pub trait Validator {
     fn visit_section_header(&self, text: &str, span: &Span) -> DiagResult;
@@ -49,10 +51,16 @@ impl Validator for SimpleSyntaxValidator {
     ) -> DiagResult {
         let mut errs = vec![];
         if !KEY.is_match(prop) {
-            errs.push(ReportedError {
-                span: *prop_span,
-                kind: ErrorKind::InvalidIdent,
-            });
+            match try_report_comment(prop, prop_span) {
+                DiagResult::Ok => return DiagResult::Ok,
+                DiagResult::None => {errs.push(ReportedError {
+                    span: *prop_span,
+                    kind: ErrorKind::InvalidIdent,
+                })}
+                DiagResult::Err(e) => {
+                    errs.extend(e);
+                }
+            }
         }
 
         let mut tmp_result = None;
@@ -87,10 +95,11 @@ impl Validator for SimpleSyntaxValidator {
             }
         }
 
-        
-
         if errs.is_empty() {
-            DiagResult::Err(vec![ReportedError { kind: ErrorKind::Other, span: *span }])
+            DiagResult::Err(vec![ReportedError {
+                kind: ErrorKind::Other,
+                span: *span,
+            }])
         } else {
             DiagResult::Err(errs)
         }
@@ -147,19 +156,20 @@ impl<'a> Directives<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ReportedError {
     pub kind: ErrorKind,
     pub span: Span,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum ErrorKind {
     InvalidIdent,
     MalformedHeader,
     SpaceAfterMultiline,
     SlashSlashComent,
     BadValue,
+    Custom(String),
     Other,
 }
 
@@ -229,10 +239,19 @@ pub fn validate_property_text(text: &str, span: &Span) -> DiagResult {
     // First, clear out the backslashes and direct newlines
     let mut reduced = String::new();
     let mut part_span = Span(0, text.len());
+
+    while let Some(b' ' | b'\t') = text.as_bytes().get(part_span.0) {
+        part_span.0 += 1;
+    }
+
+    while let Some(b' ' | b'\t') = text.as_bytes().get(part_span.1 - 1) {
+        part_span.1 -= 1;
+    }
+
     loop {
-        match text[part_span].find(|c| matches!(c, '\t' | ' ')) {
-            Some(eol) if text.get(part_span.0 + eol - 2..part_span.0 + eol) == Some(r"\\") => {
-                reduced.push_str(&text[part_span.0..part_span.0 + eol - 2]);
+        match text[part_span].find(|c| matches!(c, '\r' | '\n')) {
+            Some(eol) if text.get((part_span.0 + eol - 2)..(part_span.0 + eol)) == Some(r"\\") => {
+                reduced.push_str(&text[(part_span.0)..(part_span.0 + eol - 2)]);
                 reduced.push_str("  ");
                 part_span.0 += eol;
 
@@ -268,9 +287,26 @@ pub fn validate_property_text(text: &str, span: &Span) -> DiagResult {
             return DiagResult::Ok;
         }
 
+        let mut adj_span = *span;
+
+        if reduced.as_bytes().first() == Some(&b'(') {
+            match struct_syntax::parse(&reduced) {
+                Ok(_) => {
+                    return DiagResult::Ok;
+                }
+                Err(e) => {
+                    adj_span.0 += e.pos;
+                    return DiagResult::Err(vec![ReportedError {
+                        kind: ErrorKind::Custom(e.msg),
+                        span: adj_span,
+                    }]);
+                }
+            }
+        }
+
         DiagResult::Err(vec![ReportedError {
             kind: ErrorKind::BadValue,
-            span: Span(span.0 + part_span.0, span.0 + part_span.1),
+            span: adj_span,
         }])
     }
 }
@@ -409,9 +445,11 @@ mod tests {
         let expected_errs = expect![[r#"
             [
                 ReportedError {
-                    kind: BadValue,
+                    kind: Custom(
+                        "Expected `=`",
+                    ),
                     span: Span(
-                        13,
+                        30,
                         31,
                     ),
                 },
