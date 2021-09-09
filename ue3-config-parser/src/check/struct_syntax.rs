@@ -206,6 +206,7 @@ fn parse_array<'a>(parser: &mut Parser<'a>, ex_token: Token<'a>) -> Result<Array
                 parser.next();
             }
             Some(Token::RParen) => {
+                parser.next();
                 break;
             }
             _ => {
@@ -556,6 +557,162 @@ mod tests {
                 ParseError {
                     pos: 10,
                     msg: "Expected `,` or `)`",
+                },
+            )
+        "#]];
+        expect.assert_debug_eq(&parse(test_string));
+    }
+
+    
+    #[test]
+    fn exciting() {
+        let test_string = r#"(ItemName="EMPGrenadeMk2", Difficulties=(0,1,2), NewCost=(ResourceCosts[0]=(ItemTemplateName="Supplies", Quantity=25)))"#;
+        let tokens = Lexer::new(test_string).collect::<Vec<Token>>();
+        let expect = expect![[r#"
+            [
+                LParen,
+                Text(
+                    "ItemName",
+                ),
+                Eq,
+                Quoted(
+                    "\"EMPGrenadeMk2\"",
+                ),
+                Comma,
+                Text(
+                    "Difficulties",
+                ),
+                Eq,
+                LParen,
+                Text(
+                    "0",
+                ),
+                Comma,
+                Text(
+                    "1",
+                ),
+                Comma,
+                Text(
+                    "2",
+                ),
+                RParen,
+                Comma,
+                Text(
+                    "NewCost",
+                ),
+                Eq,
+                LParen,
+                Text(
+                    "ResourceCosts",
+                ),
+                LBrack,
+                Text(
+                    "0",
+                ),
+                RBrack,
+                Eq,
+                LParen,
+                Text(
+                    "ItemTemplateName",
+                ),
+                Eq,
+                Quoted(
+                    "\"Supplies\"",
+                ),
+                Comma,
+                Text(
+                    "Quantity",
+                ),
+                Eq,
+                Text(
+                    "25",
+                ),
+                RParen,
+                RParen,
+                RParen,
+            ]
+        "#]];
+        expect.assert_debug_eq(&tokens);
+
+        let expect = expect![[r#"
+            Ok(
+                Struct {
+                    children: [
+                        (
+                            PropName {
+                                name: "ItemName",
+                                idx: None,
+                            },
+                            Terminal(
+                                "\"EMPGrenadeMk2\"",
+                            ),
+                        ),
+                        (
+                            PropName {
+                                name: "Difficulties",
+                                idx: None,
+                            },
+                            Array(
+                                Array {
+                                    elems: [
+                                        Terminal(
+                                            "0",
+                                        ),
+                                        Terminal(
+                                            "1",
+                                        ),
+                                        Terminal(
+                                            "2",
+                                        ),
+                                    ],
+                                },
+                            ),
+                        ),
+                        (
+                            PropName {
+                                name: "NewCost",
+                                idx: None,
+                            },
+                            Struct(
+                                Struct {
+                                    children: [
+                                        (
+                                            PropName {
+                                                name: "ResourceCosts",
+                                                idx: Some(
+                                                    0,
+                                                ),
+                                            },
+                                            Struct(
+                                                Struct {
+                                                    children: [
+                                                        (
+                                                            PropName {
+                                                                name: "ItemTemplateName",
+                                                                idx: None,
+                                                            },
+                                                            Terminal(
+                                                                "\"Supplies\"",
+                                                            ),
+                                                        ),
+                                                        (
+                                                            PropName {
+                                                                name: "Quantity",
+                                                                idx: None,
+                                                            },
+                                                            Terminal(
+                                                                "25",
+                                                            ),
+                                                        ),
+                                                    ],
+                                                },
+                                            ),
+                                        ),
+                                    ],
+                                },
+                            ),
+                        ),
+                    ],
                 },
             )
         "#]];
