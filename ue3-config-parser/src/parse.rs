@@ -137,7 +137,7 @@ impl<'a> Directives<'a> {
                         let mut value_span = Span(trim_span.0 + p + 1, trim_span.1);
 
                         let mut test_line = trim_line;
-                        while test_line.ends_with(r"\\") {
+                        while test_line.ends_with(r"\\") && l_index < lines.len() - 1 {
                             l_index += 1;
                             let next_span = lines[l_index];
                             test_line = &text[next_span];

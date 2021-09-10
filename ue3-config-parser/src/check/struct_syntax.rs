@@ -175,14 +175,12 @@ pub fn parse(text: &str) -> Result<Struct<'_>, ParseError> {
     };
     let tok = parser.next();
     match tok {
-        Some(Token::LParen) => {
-            match parser.next() {
-                Some(t @ Token::Text(_)) => {
-                    parse_struct(&mut parser, t)
-                }
-                _ => Err(ParseError::new(parser.pos(), "Expected property name".to_owned())),
-            }
-            
+        Some(Token::LParen) => match parser.next() {
+            Some(t @ Token::Text(_)) => parse_struct(&mut parser, t),
+            _ => Err(ParseError::new(
+                parser.pos(),
+                "Expected property name".to_owned(),
+            )),
         },
         _ => Err(ParseError::new(parser.pos(), "Expected `(`".to_owned())),
     }
@@ -563,7 +561,6 @@ mod tests {
         expect.assert_debug_eq(&parse(test_string));
     }
 
-    
     #[test]
     fn exciting() {
         let test_string = r#"(ItemName="EMPGrenadeMk2", Difficulties=(0,1,2), NewCost=(ResourceCosts[0]=(ItemTemplateName="Supplies", Quantity=25)))"#;

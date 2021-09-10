@@ -26,3 +26,4 @@ ue3-config-parser = { path = "../ue3-config-parser" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"
+expect-test = "1.1"

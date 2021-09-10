@@ -53,10 +53,10 @@ impl Validator for SimpleSyntaxValidator {
         if !KEY.is_match(prop) {
             match try_report_comment(prop, prop_span) {
                 DiagResult::Ok => return DiagResult::Ok,
-                DiagResult::None => {errs.push(ReportedError {
+                DiagResult::None => errs.push(ReportedError {
                     span: *prop_span,
                     kind: ErrorKind::InvalidIdent,
-                })}
+                }),
                 DiagResult::Err(e) => {
                     errs.extend(e);
                 }
@@ -250,22 +250,33 @@ pub fn validate_property_text(text: &str, span: &Span) -> DiagResult {
 
     loop {
         match text[part_span].find(|c| matches!(c, '\r' | '\n')) {
-            Some(eol) if text.get((part_span.0 + eol - 2)..(part_span.0 + eol)) == Some(r"\\") => {
-                reduced.push_str(&text[(part_span.0)..(part_span.0 + eol - 2)]);
-                reduced.push_str("  ");
-                part_span.0 += eol;
+            Some(eol) => {
+                if text.get((part_span.0 + eol - 2)..(part_span.0 + eol)) == Some(r"\\") {
+                    reduced.push_str(&text[(part_span.0)..(part_span.0 + eol - 2)]);
+                    reduced.push_str("  ");
+                    part_span.0 += eol;
 
-                while matches!(
-                    text.as_bytes().get(part_span.0),
-                    Some(b'\t' | b'\r' | b'\n')
-                ) {
-                    part_span.0 += 1;
-                    reduced.push(' ');
+                    while matches!(
+                        text.as_bytes().get(part_span.0),
+                        Some(b'\t' | b'\r' | b'\n')
+                    ) {
+                        part_span.0 += 1;
+                        reduced.push(' ');
+                    }
+                } else {
+                    unreachable!(r"newline character without preceding \\ would have been split")
                 }
             }
-            Some(_) | None => {
-                reduced.push_str(&text[part_span]);
-                break;
+            None => {
+                if text.get(text.len() - 2..text.len()) == Some(r"\\") {
+                    return DiagResult::Err(vec![ReportedError {
+                        kind: ErrorKind::Custom(r"Trailing \\ without following line".to_owned()),
+                        span: Span(span.0 + part_span.0, span.0 + part_span.1),
+                    }]);
+                } else {
+                    reduced.push_str(&text[part_span]);
+                    break;
+                }
             }
         }
     }

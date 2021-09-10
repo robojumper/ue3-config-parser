@@ -6,12 +6,12 @@ use ue3_config_parser::{
     parse::Directives,
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Annotations {
     pub annots: Box<[Annotation]>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Annotation {
     pub err: String,
     pub line: u32,
@@ -53,8 +53,10 @@ fn check_inner(input: &str) -> Annotations {
             ecol: ecol as u32,
         });
     }
-    
-    Annotations { annots: annots.into_boxed_slice() }
+
+    Annotations {
+        annots: annots.into_boxed_slice(),
+    }
 }
 
 #[wasm_bindgen]
@@ -71,6 +73,7 @@ pub fn init() {
 
 #[cfg(test)]
 mod test {
+    use expect_test::expect;
 
     #[test]
     fn test_weird() {
@@ -78,6 +81,33 @@ mod test {
     SpawnDistribution[0]=(Template="AdvWraithM1", 		MinForceLevel=3, 	MaxForceLevel=7, 	MaxCharactersPerGroup=1, 	SpawnWeight=5), \\
     )"#;
 
-        super::check_inner(input);
+        let expected = expect![[r#"
+            Annotations {
+                annots: [],
+            }
+        "#]];
+        expected.assert_debug_eq(&super::check_inner(input));
+    }
+
+    #[test]
+    fn test_sigma() {
+        let input = r#"[Package.CorrectHeader]
++MyArray=(Entry[0]="Abc", \\
+), \\
+), \\"#;
+        let expected = expect![[r#"
+            Annotations {
+                annots: [
+                    Annotation {
+                        err: "Trailing \\\\ without following line",
+                        line: 4,
+                        col: 1,
+                        eline: 4,
+                        ecol: 6,
+                    },
+                ],
+            }
+        "#]];
+        expected.assert_debug_eq(&super::check_inner(input));
     }
 }
