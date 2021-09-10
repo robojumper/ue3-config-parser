@@ -174,15 +174,24 @@ pub fn parse(text: &str) -> Result<Struct<'_>, ParseError> {
         peeked: None,
     };
     let tok = parser.next();
-    match tok {
+    let result = match tok {
         Some(Token::LParen) => match parser.next() {
-            Some(t @ Token::Text(_)) => parse_struct(&mut parser, t),
-            _ => Err(ParseError::new(
-                parser.pos(),
-                "Expected property name".to_owned(),
-            )),
+            Some(t @ Token::Text(_)) => parse_struct(&mut parser, t)?,
+            _ => {
+                return Err(ParseError::new(
+                    parser.pos(),
+                    "Expected property name".to_owned(),
+                ))
+            }
         },
-        _ => Err(ParseError::new(parser.pos(), "Expected `(`".to_owned())),
+        _ => return Err(ParseError::new(parser.pos(), "Expected `(`".to_owned())),
+    };
+    match parser.next() {
+        Some(_) => Err(ParseError::new(
+            parser.pos(),
+            "Expected end of tokens".to_owned(),
+        )),
+        None => Ok(result),
     }
 }
 
@@ -364,7 +373,7 @@ fn parse_struct_or_array<'a>(parser: &mut Parser<'a>) -> Result<PropValue<'a>, P
 
 #[cfg(test)]
 mod tests {
-    use expect_test::expect;
+    use expect_test::{expect, expect_file};
 
     use super::{parse, Lexer, Token};
 
@@ -428,98 +437,16 @@ mod tests {
     fn test_small() {
         let test_string = r#"(Prop1=1.0, Prop2[0]=(T="A", W=5),)"#;
         let tokens = Lexer::new(test_string).collect::<Vec<Token>>();
-        let expect = expect![[r#"
-            [
-                LParen,
-                Text(
-                    "Prop1",
-                ),
-                Eq,
-                Text(
-                    "1.0",
-                ),
-                Comma,
-                Text(
-                    "Prop2",
-                ),
-                LBrack,
-                Text(
-                    "0",
-                ),
-                RBrack,
-                Eq,
-                LParen,
-                Text(
-                    "T",
-                ),
-                Eq,
-                Quoted(
-                    "\"A\"",
-                ),
-                Comma,
-                Text(
-                    "W",
-                ),
-                Eq,
-                Text(
-                    "5",
-                ),
-                RParen,
-                Comma,
-                RParen,
-            ]
-        "#]];
+        let expect = expect_file![concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test_data/struct/small_tokens.txt"
+        )];
         expect.assert_debug_eq(&tokens);
 
-        let expect = expect![[r#"
-            Ok(
-                Struct {
-                    children: [
-                        (
-                            PropName {
-                                name: "Prop1",
-                                idx: None,
-                            },
-                            Terminal(
-                                "1.0",
-                            ),
-                        ),
-                        (
-                            PropName {
-                                name: "Prop2",
-                                idx: Some(
-                                    0,
-                                ),
-                            },
-                            Struct(
-                                Struct {
-                                    children: [
-                                        (
-                                            PropName {
-                                                name: "T",
-                                                idx: None,
-                                            },
-                                            Terminal(
-                                                "\"A\"",
-                                            ),
-                                        ),
-                                        (
-                                            PropName {
-                                                name: "W",
-                                                idx: None,
-                                            },
-                                            Terminal(
-                                                "5",
-                                            ),
-                                        ),
-                                    ],
-                                },
-                            ),
-                        ),
-                    ],
-                },
-            )
-        "#]];
+        let expect = expect_file![concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test_data/struct/small_parsed.txt"
+        )];
         expect.assert_debug_eq(&parse(test_string));
     }
 
@@ -565,66 +492,33 @@ mod tests {
     fn exciting() {
         let test_string = r#"(ItemName="EMPGrenadeMk2", Difficulties=(0,1,2), NewCost=(ResourceCosts[0]=(ItemTemplateName="Supplies", Quantity=25)))"#;
         let tokens = Lexer::new(test_string).collect::<Vec<Token>>();
+        let expect = expect_file![concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test_data/struct/exciting_tokens.txt"
+        )];
+        expect.assert_debug_eq(&tokens);
+
+        let expect = expect_file![concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/test_data/struct/exciting_parsed.txt"
+        )];
+        expect.assert_debug_eq(&parse(test_string));
+    }
+
+    #[test]
+    fn trailing() {
+        let test_string = r#"(A="B"))"#;
+        let tokens = Lexer::new(test_string).collect::<Vec<Token>>();
         let expect = expect![[r#"
             [
                 LParen,
                 Text(
-                    "ItemName",
+                    "A",
                 ),
                 Eq,
                 Quoted(
-                    "\"EMPGrenadeMk2\"",
+                    "\"B\"",
                 ),
-                Comma,
-                Text(
-                    "Difficulties",
-                ),
-                Eq,
-                LParen,
-                Text(
-                    "0",
-                ),
-                Comma,
-                Text(
-                    "1",
-                ),
-                Comma,
-                Text(
-                    "2",
-                ),
-                RParen,
-                Comma,
-                Text(
-                    "NewCost",
-                ),
-                Eq,
-                LParen,
-                Text(
-                    "ResourceCosts",
-                ),
-                LBrack,
-                Text(
-                    "0",
-                ),
-                RBrack,
-                Eq,
-                LParen,
-                Text(
-                    "ItemTemplateName",
-                ),
-                Eq,
-                Quoted(
-                    "\"Supplies\"",
-                ),
-                Comma,
-                Text(
-                    "Quantity",
-                ),
-                Eq,
-                Text(
-                    "25",
-                ),
-                RParen,
                 RParen,
                 RParen,
             ]
@@ -632,84 +526,10 @@ mod tests {
         expect.assert_debug_eq(&tokens);
 
         let expect = expect![[r#"
-            Ok(
-                Struct {
-                    children: [
-                        (
-                            PropName {
-                                name: "ItemName",
-                                idx: None,
-                            },
-                            Terminal(
-                                "\"EMPGrenadeMk2\"",
-                            ),
-                        ),
-                        (
-                            PropName {
-                                name: "Difficulties",
-                                idx: None,
-                            },
-                            Array(
-                                Array {
-                                    elems: [
-                                        Terminal(
-                                            "0",
-                                        ),
-                                        Terminal(
-                                            "1",
-                                        ),
-                                        Terminal(
-                                            "2",
-                                        ),
-                                    ],
-                                },
-                            ),
-                        ),
-                        (
-                            PropName {
-                                name: "NewCost",
-                                idx: None,
-                            },
-                            Struct(
-                                Struct {
-                                    children: [
-                                        (
-                                            PropName {
-                                                name: "ResourceCosts",
-                                                idx: Some(
-                                                    0,
-                                                ),
-                                            },
-                                            Struct(
-                                                Struct {
-                                                    children: [
-                                                        (
-                                                            PropName {
-                                                                name: "ItemTemplateName",
-                                                                idx: None,
-                                                            },
-                                                            Terminal(
-                                                                "\"Supplies\"",
-                                                            ),
-                                                        ),
-                                                        (
-                                                            PropName {
-                                                                name: "Quantity",
-                                                                idx: None,
-                                                            },
-                                                            Terminal(
-                                                                "25",
-                                                            ),
-                                                        ),
-                                                    ],
-                                                },
-                                            ),
-                                        ),
-                                    ],
-                                },
-                            ),
-                        ),
-                    ],
+            Err(
+                ParseError {
+                    pos: 7,
+                    msg: "Expected end of tokens",
                 },
             )
         "#]];

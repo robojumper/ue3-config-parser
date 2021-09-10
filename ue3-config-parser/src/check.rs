@@ -268,7 +268,7 @@ pub fn validate_property_text(text: &str, span: &Span) -> DiagResult {
                 }
             }
             None => {
-                if text.get(text.len() - 2..text.len()) == Some(r"\\") {
+                if text.get(text.len().saturating_sub(2)..text.len()) == Some(r"\\") {
                     return DiagResult::Err(vec![ReportedError {
                         kind: ErrorKind::Custom(r"Trailing \\ without following line".to_owned()),
                         span: Span(span.0 + part_span.0, span.0 + part_span.1),
@@ -506,5 +506,49 @@ mod tests {
             }
         "#]];
         expected.assert_debug_eq(&Directives::from_text(header));
+    }
+
+    #[test]
+    fn curly() {
+        let text = r"+AlsoInvalid{01}=1";
+        let expected = expect![[r#"
+            Directives {
+                text: "+AlsoInvalid{01}=1",
+                directives: [
+                    Kvp(
+                        Kvp {
+                            span: Span(
+                                1,
+                                18,
+                            ),
+                            ident: Span(
+                                1,
+                                16,
+                            ),
+                            value: Span(
+                                17,
+                                18,
+                            ),
+                            op: InsertUnique,
+                        },
+                    ),
+                ],
+            }
+        "#]];
+        let dirs = Directives::from_text(text);
+        expected.assert_debug_eq(&dirs);
+
+        let expected_errs = expect![[r#"
+            [
+                ReportedError {
+                    kind: InvalidIdent,
+                    span: Span(
+                        1,
+                        16,
+                    ),
+                },
+            ]
+        "#]];
+        expected_errs.assert_debug_eq(&dirs.validate(&SimpleSyntaxValidator));
     }
 }

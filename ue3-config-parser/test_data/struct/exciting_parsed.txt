@@ -1,0 +1,80 @@
+Ok(
+    Struct {
+        children: [
+            (
+                PropName {
+                    name: "ItemName",
+                    idx: None,
+                },
+                Terminal(
+                    "\"EMPGrenadeMk2\"",
+                ),
+            ),
+            (
+                PropName {
+                    name: "Difficulties",
+                    idx: None,
+                },
+                Array(
+                    Array {
+                        elems: [
+                            Terminal(
+                                "0",
+                            ),
+                            Terminal(
+                                "1",
+                            ),
+                            Terminal(
+                                "2",
+                            ),
+                        ],
+                    },
+                ),
+            ),
+            (
+                PropName {
+                    name: "NewCost",
+                    idx: None,
+                },
+                Struct(
+                    Struct {
+                        children: [
+                            (
+                                PropName {
+                                    name: "ResourceCosts",
+                                    idx: Some(
+                                        0,
+                                    ),
+                                },
+                                Struct(
+                                    Struct {
+                                        children: [
+                                            (
+                                                PropName {
+                                                    name: "ItemTemplateName",
+                                                    idx: None,
+                                                },
+                                                Terminal(
+                                                    "\"Supplies\"",
+                                                ),
+                                            ),
+                                            (
+                                                PropName {
+                                                    name: "Quantity",
+                                                    idx: None,
+                                                },
+                                                Terminal(
+                                                    "25",
+                                                ),
+                                            ),
+                                        ],
+                                    },
+                                ),
+                            ),
+                        ],
+                    },
+                ),
+            ),
+        ],
+    },
+)

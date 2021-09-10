@@ -1,0 +1,47 @@
+Ok(
+    Struct {
+        children: [
+            (
+                PropName {
+                    name: "Prop1",
+                    idx: None,
+                },
+                Terminal(
+                    "1.0",
+                ),
+            ),
+            (
+                PropName {
+                    name: "Prop2",
+                    idx: Some(
+                        0,
+                    ),
+                },
+                Struct(
+                    Struct {
+                        children: [
+                            (
+                                PropName {
+                                    name: "T",
+                                    idx: None,
+                                },
+                                Terminal(
+                                    "\"A\"",
+                                ),
+                            ),
+                            (
+                                PropName {
+                                    name: "W",
+                                    idx: None,
+                                },
+                                Terminal(
+                                    "5",
+                                ),
+                            ),
+                        ],
+                    },
+                ),
+            ),
+        ],
+    },
+)
