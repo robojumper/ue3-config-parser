@@ -240,11 +240,11 @@ pub fn validate_property_text(text: &str, span: &Span) -> DiagResult {
     let mut reduced = String::new();
     let mut part_span = Span(0, text.len());
 
-    while let Some(b' ' | b'\t') = text.as_bytes().get(part_span.0) {
+    while let Some(b' ' | b'\t') = text[part_span].as_bytes().first() {
         part_span.0 += 1;
     }
 
-    while let Some(b' ' | b'\t') = text.as_bytes().get(part_span.1 - 1) {
+    while let Some(b' ' | b'\t') = text[part_span].as_bytes().last() {
         part_span.1 -= 1;
     }
 
@@ -257,7 +257,7 @@ pub fn validate_property_text(text: &str, span: &Span) -> DiagResult {
                     part_span.0 += eol;
 
                     while matches!(
-                        text.as_bytes().get(part_span.0),
+                        text[part_span].as_bytes().first(),
                         Some(b'\t' | b'\r' | b'\n')
                     ) {
                         part_span.0 += 1;
@@ -551,4 +551,46 @@ mod tests {
         "#]];
         expected_errs.assert_debug_eq(&dirs.validate(&SimpleSyntaxValidator));
     }
+
+    #[test]
+    fn what() {
+        let text = "\t\t\t\t+RandomAbilityDecks = (DeckName=\"YpresShieldAbilitiesT3\",  \\\\
+    Abilities=( \\\\
+\t\t\t\t(AbilityName=\"GrimyWillToSurvive\") \\\\
+                ))\\\\
+\t";
+        let expected = expect![[r#"
+            Directives {
+                text: "\t\t\t\t+RandomAbilityDecks = (DeckName=\"YpresShieldAbilitiesT3\",  \\\\\n    Abilities=( \\\\\n\t\t\t\t(AbilityName=\"GrimyWillToSurvive\") \\\\\n                ))\\\\\n\t",
+                directives: [
+                    Kvp(
+                        Kvp {
+                            span: Span(
+                                5,
+                                149,
+                            ),
+                            ident: Span(
+                                5,
+                                23,
+                            ),
+                            value: Span(
+                                25,
+                                149,
+                            ),
+                            op: InsertUnique,
+                        },
+                    ),
+                ],
+            }
+        "#]];
+        let dirs = Directives::from_text(text);
+        expected.assert_debug_eq(&dirs);
+
+        let expected_errs = expect![[r#"
+            []
+        "#]];
+        expected_errs.assert_debug_eq(&dirs.validate(&SimpleSyntaxValidator));
+    }
+
+
 }

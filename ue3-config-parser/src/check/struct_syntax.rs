@@ -48,7 +48,7 @@ impl<'a> Lexer<'a> {
                     end = p + 1;
                     break;
                 }
-                Some((p, c)) if (matches!(c, '(' | ')' | '[' | ']' | ',' | '=' | '"' | ';')) => {
+                Some((p, c)) if !quoted && (matches!(c, '(' | ')' | '[' | ']' | ',' | '=' | '"' | ';')) => {
                     end = *p;
                     break;
                 }
@@ -173,8 +173,7 @@ pub fn parse(text: &str) -> Result<Struct<'_>, ParseError> {
         lexer,
         peeked: None,
     };
-    let tok = parser.next();
-    let result = match tok {
+    let result = match parser.next() {
         Some(Token::LParen) => match parser.next() {
             Some(t @ Token::Text(_)) => parse_struct(&mut parser, t)?,
             _ => {
@@ -201,8 +200,13 @@ fn parse_array<'a>(parser: &mut Parser<'a>, ex_token: Token<'a>) -> Result<Array
     match ex_token {
         Token::Text(s) | Token::Quoted(s) => elems.push(PropValue::Terminal(s)),
         Token::LParen => {
-            // Nested arrays don't exist, so arrays contain either terminals or structs
-            elems.push(PropValue::Struct(parse_struct(parser, ex_token)?))
+            match parser.next() {
+                Some(t @ Token::Text(_)) => {
+                    // Nested arrays don't exist, so arrays contain either terminals or structs
+                    elems.push(PropValue::Struct(parse_struct(parser, t)?))
+                }
+                _ => return Err(ParseError::new(parser.pos(), "expected name".to_owned())),
+            }
         }
         _ => unreachable!(),
     }
@@ -230,8 +234,13 @@ fn parse_array<'a>(parser: &mut Parser<'a>, ex_token: Token<'a>) -> Result<Array
             }
             Some(Token::Text(s) | Token::Quoted(s)) => elems.push(PropValue::Terminal(s)),
             Some(Token::LParen) => {
-                // Nested arrays don't exist, so arrays contain either terminals or structs
-                elems.push(PropValue::Struct(parse_struct(parser, ex_token)?))
+                match parser.next() {
+                    Some(t @ Token::Text(_)) => {
+                        // Nested arrays don't exist, so arrays contain either terminals or structs
+                        elems.push(PropValue::Struct(parse_struct(parser, t)?))
+                    }
+                    _ => return Err(ParseError::new(parser.pos(), "expected name".to_owned())),
+                }
             }
             _ => return Err(ParseError::new(parser.pos(), "expected value".to_owned())),
         }
@@ -530,6 +539,105 @@ mod tests {
                 ParseError {
                     pos: 7,
                     msg: "Expected end of tokens",
+                },
+            )
+        "#]];
+        expect.assert_debug_eq(&parse(test_string));
+    }
+
+    #[test]
+    fn what() {
+        let test_string = r#"(DeckName="YpresXComAbilitiesT1",          Abilities=(         (AbilityName="EverVigilant", ApplyToWeaponSlot=eInvSlot_PrimaryWeapon)                     ))"#;
+        let tokens = Lexer::new(test_string).collect::<Vec<Token>>();
+        let expect = expect![[r#"
+            [
+                LParen,
+                Text(
+                    "DeckName",
+                ),
+                Eq,
+                Quoted(
+                    "\"YpresXComAbilitiesT1\"",
+                ),
+                Comma,
+                Text(
+                    "Abilities",
+                ),
+                Eq,
+                LParen,
+                LParen,
+                Text(
+                    "AbilityName",
+                ),
+                Eq,
+                Quoted(
+                    "\"EverVigilant\"",
+                ),
+                Comma,
+                Text(
+                    "ApplyToWeaponSlot",
+                ),
+                Eq,
+                Text(
+                    "eInvSlot_PrimaryWeapon",
+                ),
+                RParen,
+                RParen,
+                RParen,
+            ]
+        "#]];
+        expect.assert_debug_eq(&tokens);
+
+        let expect = expect![[r#"
+            Ok(
+                Struct {
+                    children: [
+                        (
+                            PropName {
+                                name: "DeckName",
+                                idx: None,
+                            },
+                            Terminal(
+                                "\"YpresXComAbilitiesT1\"",
+                            ),
+                        ),
+                        (
+                            PropName {
+                                name: "Abilities",
+                                idx: None,
+                            },
+                            Array(
+                                Array {
+                                    elems: [
+                                        Struct(
+                                            Struct {
+                                                children: [
+                                                    (
+                                                        PropName {
+                                                            name: "AbilityName",
+                                                            idx: None,
+                                                        },
+                                                        Terminal(
+                                                            "\"EverVigilant\"",
+                                                        ),
+                                                    ),
+                                                    (
+                                                        PropName {
+                                                            name: "ApplyToWeaponSlot",
+                                                            idx: None,
+                                                        },
+                                                        Terminal(
+                                                            "eInvSlot_PrimaryWeapon",
+                                                        ),
+                                                    ),
+                                                ],
+                                            },
+                                        ),
+                                    ],
+                                },
+                            ),
+                        ),
+                    ],
                 },
             )
         "#]];
